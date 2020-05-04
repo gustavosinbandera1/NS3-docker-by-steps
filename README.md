@@ -28,7 +28,8 @@
       - [Construyendo el script](#construyendo-el-script)
     - [Habilitando el registro](#habilitando-el-registro)
       - [Agregar registro a su código](#agregar-registro-a-su-c%c3%b3digo)
-  - [Usando argumentos de línea de comando](#usando-argumentos-de-l%c3%adnea-de-comando)
+    - [Usando argumentos de línea de comando](#usando-argumentos-de-l%c3%adnea-de-comando)
+    - [Enganchando tus propios valores](#enganchando-tus-propios-valores)
 
 
 ## Introduccion
@@ -680,7 +681,7 @@ At time 2.00369s server sent 1024 bytes to 10.1.1.1 port 49153
 At time 2.00737s client received 1024 bytes from 10.1.1.2 port 9
 ```
 
-## Usando argumentos de línea de comando 
+### Usando argumentos de línea de comando 
 Anulación de atributos predeterminados 
 Otra forma de cambiar el comportamiento de los scripts ns-3 sin editar y construir es mediante argumentos de línea de comandos. Proporcionamos un mecanismo para analizar argumentos de línea de comandos y establecer automáticamente variables locales y globales basadas en esos argumentos.
 
@@ -727,3 +728,183 @@ PointToPointHelper pointToPoint;
 pointToPoint.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
 pointToPoint.SetChannelAttribute ("Delay", StringValue ("2ms"));
 ```
+se mencionó que DataRate era en realidad un atributo del __PointToPointNetDevice__. Usemos el analizador de argumentos de línea de comando para echar un vistazo a los Atributos del __PointToPointNetDevice__. La lista de ayuda dice que debemos proporcionar un TypeId . Esto corresponde al nombre de la clase a la que pertenecen los Atributos . En este caso será __ns3::PointToPointNetDevice__. Sigamos adelante y escriba,
+
+`./waf --run "scratch/myfirst --PrintAttributes=ns3::PointToPointNetDevice"`
+vera  la siguienten salida,
+
+```bash
+root@gustavosinbandera1-HP-Laptop-17-bs0xx:/usr/ns-allinone-3.26/ns-3.26# ./waf --run "scratch/myfirst --PrintAttributes=ns3::PointToPointNetDevice"
+Waf: Entering directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Waf: Leaving directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Build commands will be stored in build/compile_commands.json
+'build' finished successfully (3.135s)
+Attributes for TypeId ns3::PointToPointNetDevice
+    --ns3::PointToPointNetDevice::Address=[ff:ff:ff:ff:ff:ff]
+        The MAC address of this device.
+    --ns3::PointToPointNetDevice::DataRate=[32768bps]
+        The default data rate for point to point links
+    --ns3::PointToPointNetDevice::InterframeGap=[+0.0ns]
+        The time to wait between packet (frame) transmissions
+    --ns3::PointToPointNetDevice::Mtu=[1500]
+        The MAC-level Maximum Transmission Unit
+    --ns3::PointToPointNetDevice::ReceiveErrorModel=[0]
+        The receiver error model used to simulate packet loss
+    --ns3::PointToPointNetDevice::TxQueue=[0]
+```
+
+El sistema imprimirá todos los atributos de este tipo de dispositivo de red. Entre los atributos que verá en la lista se encuentra,
+
+```bash
+--ns3 :: PointToPointNetDevice :: DataRate = [32768bps]:
+  La velocidad de datos predeterminada para enlaces punto a punto
+```
+
+Este es el valor predeterminado que se utilizará cuando se crea un __PointToPointNetDevice__ en el sistema. Anulamos este valor predeterminado con la configuración de Atributo en PointToPointHelper anterior. Usemos los valores predeterminados para los dispositivos y canales punto a punto eliminando la llamada SetDeviceAttribute y la llamada SetChannelAttribute del myfirst.cc que tenemos en el directorio reutilizable.
+
+Su script ahora debería declarar __PointToPointHelper__ y no realizar ninguna operación de configuración como en el siguiente ejemplo,
+
+```cpp
+...
+
+Nodos NodeContainer;
+nodos.Crear (2);
+
+PointToPointHelper pointToPoint;
+
+Dispositivos NetDeviceContainer;
+dispositivos = pointToPoint.Install (nodos);
+
+...
+```
+
+Continúe y haga build al  script con Waf ( ./waf ) y regresemos y habilitemos algunos registros desde la aplicación del servidor de eco UDP y activemos el prefijo de tiempo.
+
+`export 'NS_LOG=UdpEchoServerApplication=level_all|prefix_time'`
+Si ejecuta el script, ahora debería ver el siguiente resultado,
+
+```bash
+root@gustavosinbandera1-HP-Laptop-17-bs0xx:/usr/ns-allinone-3.26/ns-3.26# ./waf --run scratch/myfirst
+Waf: Entering directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Waf: Leaving directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Build commands will be stored in build/compile_commands.json
+'build' finished successfully (3.085s)
+0s UdpEchoServerApplication:UdpEchoServer(0x1742f50)
+1s UdpEchoServerApplication:StartApplication(0x1742f50)
+At time 2s client sent 1024 bytes to 10.1.1.2 port 9
+2.25732s UdpEchoServerApplication:HandleRead(0x1742f50, 0x1702a30)
+2.25732s At time 2.25732s server received 1024 bytes from 10.1.1.1 port 49153
+2.25732s Echoing packet
+2.25732s At time 2.25732s server sent 1024 bytes to 10.1.1.1 port 49153
+At time 2.51465s client received 1024 bytes from 10.1.1.2 port 9
+10s UdpEchoServerApplication:StopApplication(0x1742f50)
+UdpEchoServerApplication:DoDispose(0x1742f50)
+UdpEchoServerApplication:~UdpEchoServer(0x1742f50)
+```
+
+Recuerde que la última vez que observamos el tiempo de simulación en el que el servidor de eco recibió el paquete, fue a 2.00369 segundos.
+
+`2.00369s UdpEchoServerApplication: HandleRead (): Recibió 1024 bytes de 10.1.1.1`
+Ahora está recibiendo el paquete a 2.25732 segundos. Esto se debe a que simplemente bajamos la velocidad de datos del PointToPointNetDevice a su valor predeterminado de 32768 bits por segundo desde cinco megabits por segundo.
+
+Si proporcionáramos un nuevo DataRate usando la línea de comando, podríamos acelerar nuestra simulación nuevamente. Hacemos esto de la siguiente manera, de acuerdo con la fórmula implícita en el ítem de ayuda:
+```bash
+./waf --run "scratch/myfirst --ns3::PointToPointNetDevice::DataRate=5Mbps"
+```
+
+Esto establecerá el valor predeterminado del atributo DataRate a cinco megabits por segundo. ¿Te sorprende el resultado? Resulta que para recuperar el comportamiento original del script, también tendremos que establecer el retraso de la velocidad de la luz del canal. Podemos pedirle al sistema de línea de comando que imprima los Atributos del canal tal como lo hicimos para el dispositivo de red:
+
+```
+./waf --run "scratch/myfirst --PrintAttributes=ns3::PointToPointChannel"
+```
+
+Descubrimos que el Atributo de retraso del canal se establece de la siguiente manera:
+```bash
+--ns3 :: PointToPointChannel :: Delay = [0ns]:
+Retraso de transmisión a través del canal
+```
+
+Luego podemos establecer ambos valores predeterminados a través del sistema de línea de comandos,
+
+```bash
+./waf --run "scratch/myfirst --ns3::PointToPointNetDevice::DataRate=5Mbps --ns3::PointToPointChannel::Delay=2ms"
+```
+
+Tenga en cuenta que el servidor vuelve a recibir el paquete a los 2.00369 segundos. De hecho, podríamos establecer cualquiera de los Atributos utilizados en el script de esta manera. En particular, podríamos establecer el UdpEchoClient Attribute MaxPackets en algún otro valor que no sea uno.
+
+¿Cómo harías eso? Darle una oportunidad. Recuerde que debe comentar el lugar donde anulamos el Atributo predeterminado y establecer explícitamente MaxPackets en el script. Luego tienes que reconstruir el script. También tendrá que encontrar la sintaxis para configurar realmente el nuevo valor de atributo predeterminado utilizando la función de ayuda de la línea de comandos. Una vez que haya resuelto esto, debería poder controlar la cantidad de paquetes que se repiten en la línea de comando. Como somos buenas personas, le diremos que su línea de comando debería terminar pareciendo algo así como,
+
+```bash
+./waf --run "scratch / myfirst --ns3::PointToPointNetDevice::DataRate=5Mbps 
+--ns3::PointToPointChannel::Delay=2ms 
+--ns3::UdpEchoClient::MaxPackets=2 "
+```
+
+### Enganchando tus propios valores 
+También puede agregar sus propios ganchos al sistema de línea de comandos. Esto se hace simplemente usando el método AddValue para el analizador de línea de comando.
+
+Usemos esta función para especificar el número de paquetes a hacer eco de una manera completamente diferente. Agreguemos una variable local llamada __nPackets__ a la función principal. Lo inicializaremos a uno para que coincida con nuestro comportamiento predeterminado anterior. Para permitir que el analizador de línea de comando cambie este valor, necesitamos conectar el valor al analizador. Hacemos esto agregando una llamada a AddValue . Continúe y cambie el script scratch/myfirst.cc para comenzar con el siguiente código,
+
+```cpp
+int
+main (int argc, char * argv [])
+{
+  uint32_t nPackets = 1;
+
+  CommandLine cmd;
+  cmd.AddValue ("nPackets", "Número de paquetes a eco", nPackets);
+  cmd.Parse (argc, argv);
+
+  ...
+```
+
+
+Desplácese hacia abajo hasta el punto en el script donde establecemos el Atributo MaxPackets y cámbielo para que se establezca en la variable nPackets en lugar de la constante 1 como se muestra a continuación.
+
+```cpp
+echoClient. SetAttribute("MaxPackets", UintegerValue(nPackets));
+```
+
+Si desea especificar el número de paquetes a eco, ahora puede hacerlo estableciendo el argumento --nPackets en la línea de comando,
+
+```bash
+./waf --run "scratch/myfirst --nPackets = 2"
+```
+Si ejecuta la aplicacion ahora vera que el server recibira los dos paquetes que le hemos asignado al cliente desde la linea de comandos,
+
+Ahora, si ejecuta el script y proporciona el argumento --PrintHelp , debería ver su nuevo argumento de usuario en la pantalla de ayuda.
+
+Si desea especificar el número de paquetes a eco, ahora puede hacerlo estableciendo el argumento --nPackets en la línea de comando,
+```bash
+./waf --run "scratch/myfirst --nPackets=2"
+```
+
+Ahora deberías ver:
+```bash
+root@gustavosinbandera1-HP-Laptop-17-bs0xx:/usr/ns-allinone-3.26/ns-3.26# ./waf --run "scratch/myfirst --nPackets=2"
+Waf: Entering directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Waf: Leaving directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Build commands will be stored in build/compile_commands.json
+'build' finished successfully (3.162s)
+0s UdpEchoServerApplication:UdpEchoServer(0x1c96b00)
+1s UdpEchoServerApplication:StartApplication(0x1c96b00)
+At time 2s client sent 1024 bytes to 10.1.1.2 port 9
+2.25732s UdpEchoServerApplication:HandleRead(0x1c96b00, 0x1c56a80)
+2.25732s At time 2.25732s server received 1024 bytes from 10.1.1.1 port 49153
+2.25732s Echoing packet
+2.25732s At time 2.25732s server sent 1024 bytes to 10.1.1.1 port 49153
+At time 2.51465s client received 1024 bytes from 10.1.1.2 port 9
+At time 3s client sent 1024 bytes to 10.1.1.2 port 9
+3.25732s UdpEchoServerApplication:HandleRead(0x1c96b00, 0x1c56a80)
+3.25732s At time 3.25732s server received 1024 bytes from 10.1.1.1 port 49153
+3.25732s Echoing packet
+3.25732s At time 3.25732s server sent 1024 bytes to 10.1.1.1 port 49153
+At time 3.51465s client received 1024 bytes from 10.1.1.2 port 9
+10s UdpEchoServerApplication:StopApplication(0x1c96b00)
+UdpEchoServerApplication:DoDispose(0x1c96b00)
+UdpEchoServerApplication:~UdpEchoServer(0x1c96b00)
+root@gustavosinbandera1-HP-Laptop-17-bs0xx:/usr/ns-allinone-3.26/ns-3.26# 
+```
+Ahora ha hecho eco de dos paquetes. Bastante fácil, ¿no es así?
+
+Puede ver que si es un usuario ns-3 , puede usar el sistema de argumentos de la línea de comandos para controlar los valores y atributos globales . Si usted es un autor de modelo, puede agregar nuevos Atributos a sus Objetos y estarán automáticamente disponibles para que sus usuarios los configuren a través del sistema de línea de comandos. Si usted es un autor de scripts, puede agregar nuevas variables a sus scripts y conectarlos al sistema de línea de comandos sin problemas.

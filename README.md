@@ -26,6 +26,9 @@
         - [UdpEchoClientHelper](#udpechoclienthelper)
       - [Simulador](#simulador)
       - [Construyendo el script](#construyendo-el-script)
+    - [Habilitando el registro](#habilitando-el-registro)
+      - [Agregar registro a su código](#agregar-registro-a-su-c%c3%b3digo)
+  - [Usando argumentos de línea de comando](#usando-argumentos-de-l%c3%adnea-de-comando)
 
 
 ## Introduccion
@@ -455,6 +458,272 @@ At time 2s client sent 1024 bytes to 10.1.1.2 port 9
 At time 2.00369s server received 1024 bytes from 10.1.1.1 port 49153
 At time 2.00369s server sent 1024 bytes to 10.1.1.1 port 49153
 At time 2.00737s client received 1024 bytes from 10.1.1.2 port 9
+```
+
+Aquí verá que el sistema de compilación comprueba para asegurarse de que el archivo se ha compilado y luego lo ejecuta. Verá que el componente de registro en el cliente echo indica que ha enviado un paquete de 1024 bytes al servidor Echo en 10.1.1.2. También verá que el componente de registro en el servidor echo dice que ha recibido los 1024 bytes de 10.1.1.1. El servidor echo repite silenciosamente el paquete y ve el registro del cliente echo que ha recibido su paquete del servidor.
+
+### Habilitando el registro 
+Usemos la variable de entorno __NS_LOG__ para activar un poco más de registro, pero primero, solo para orientarnos, avance y ejecute el último script tal como lo hizo anteriormente,
+
+`./waf --run scratch / myfirst`
+
+```
+root@gustavosinbandera1-HP-Laptop-17-bs0xx:/usr/ns-allinone-3.26/ns-3.26# ./waf --run scratch/myfirst
+Waf: Entering directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Waf: Leaving directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Build commands will be stored in build/compile_commands.json
+'build' finished successfully (2.864s)
+At time 2s client sent 1024 bytes to 10.1.1.2 port 9
+At time 2.00369s server received 1024 bytes from 10.1.1.1 port 49153
+At time 2.00369s server sent 1024 bytes to 10.1.1.1 port 49153
+At time 2.00737s client received 1024 bytes from 10.1.1.2 port 9
+```
+
+Resulta que los mensajes "Enviados" y "Recibidos" que ve arriba son en realidad mensajes de registro de __UdpEchoClientApplication__ y __UdpEchoServerApplication__ . Podemos pedirle a la aplicación cliente, por ejemplo, que imprima más información configurando su nivel de registro a través de la variable de entorno NS_LOG.
+
+A partir de ahora voy a suponer que está utilizando un shell tipo sh que utiliza la sintaxis "VARIABLE = value". 
+
+En este momento, la aplicación de cliente de eco UDP está respondiendo a la siguiente línea de código en scratch/myfirst.cc,
+
+`LogComponentEnable ( "UdpEchoClientApplication" ,  LOG_LEVEL_INFO );`
+
+Esta línea de código habilita el nivel de registro LOG_LEVEL_INFO . Cuando pasamos un indicador de nivel de registro, en realidad estamos habilitando el nivel dado y todos los niveles inferiores. En este caso, hemos habilitado NS_LOG_INFO , NS_LOG_DEBUG , NS_LOG_WARN y NS_LOG_ERROR . Podemos aumentar el nivel de registro y obtener más información sin cambiar el script y volver a compilar configurando la variable de entorno NS_LOG de esta manera:
+
+`export NS_LOG = UdpEchoClientApplication = level_all`
+
+El lado izquierdo de la asignación es el nombre del componente de registro que queremos establecer, y el lado derecho es la bandera que queremos usar. En este caso, vamos a activar todos los niveles de depuración para la aplicación. Si ejecuta el script con NS_LOG configurado de esta manera, el sistema de registro ns-3 recogerá el cambio y debería ver el siguiente resultado:
+
+```bash
+root@gustavosinbandera1-HP-Laptop-17-bs0xx:/usr/ns-allinone-3.26/ns-3.26# ./waf --run scratch/myfirst
+Waf: Entering directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Waf: Leaving directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Build commands will be stored in build/compile_commands.json
+'build' finished successfully (3.240s)
+UdpEchoClientApplication:UdpEchoClient(0x1b46d90)
+UdpEchoClientApplication:SetDataSize(0x1b46d90, 1024)
+UdpEchoClientApplication:StartApplication(0x1b46d90)
+UdpEchoClientApplication:ScheduleTransmit(0x1b46d90, +0.0ns)
+UdpEchoClientApplication:Send(0x1b46d90)
+At time 2s client sent 1024 bytes to 10.1.1.2 port 9
+At time 2.00369s server received 1024 bytes from 10.1.1.1 port 49153
+At time 2.00369s server sent 1024 bytes to 10.1.1.1 port 49153
+UdpEchoClientApplication:HandleRead(0x1b46d90, 0x1b47790)
+At time 2.00737s client received 1024 bytes from 10.1.1.2 port 9
+UdpEchoClientApplication:StopApplication(0x1b46d90)
+UdpEchoClientApplication:DoDispose(0x1b46d90)
+UdpEchoClientApplication:~UdpEchoClient(0x1b46d90)
+```
+
+La información adicional de depuración proporcionada por la aplicación proviene del nivel NS_LOG_FUNCTION. Esto muestra cada vez que se llama a una función en la aplicación durante la ejecución del script. Tenga en cuenta que no hay requisitos en el sistema ns-3 de que los modelos deben admitir ninguna funcionalidad de registro particular. La decisión con respecto a la cantidad de información registrada se deja al desarrollador del modelo individual. En el caso de las aplicaciones de eco, hay una buena cantidad de salida de registro disponible.
+
+Ahora puede ver un registro de las llamadas a funciones que se realizaron en la aplicación. Si observa detenidamente, notará dos puntos entre la cadena __UdpEchoClientApplication__ y el nombre del método donde podría haber esperado un operador de ámbito C ++ ( ::) . Esto es intencional
+
+El nombre no es en realidad un nombre de clase, es un nombre de componente de registro. Cuando hay una correspondencia uno a uno entre un archivo fuente y una clase, generalmente será el nombre de la clase, pero debe comprender que en realidad no es un nombre de clase, y que hay un solo dos puntos en lugar de dos puntos. para recordarle de una manera relativamente sutil que separe conceptualmente el nombre del componente de registro del nombre de la clase.
+
+Resulta que en algunos casos, puede ser difícil determinar qué método realmente genera un mensaje de registro. Si observa el texto anterior, puede preguntarse de dónde proviene la cadena " Recibió 1024 bytes de 10.1.1.2 ". Puede resolver esto. Intente hacer lo siguiente,
+
+`export 'NS_LOG = UdpEchoClientApplication = level_all | prefix_func'`
+
+```bash
+root@gustavosinbandera1-HP-Laptop-17-bs0xx:/usr/ns-allinone-3.26/ns-3.26# ./waf --run scratch/myfirst
+Waf: Entering directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Waf: Leaving directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Build commands will be stored in build/compile_commands.json
+'build' finished successfully (3.100s)
+UdpEchoClientApplication:UdpEchoClient(0x207d280)
+UdpEchoClientApplication:SetDataSize(0x207d280, 1024)
+UdpEchoClientApplication:StartApplication(0x207d280)
+UdpEchoClientApplication:ScheduleTransmit(0x207d280, +0.0ns)
+UdpEchoClientApplication:Send(0x207d280)
+UdpEchoClientApplication:Send(): At time 2s client sent 1024 bytes to 10.1.1.2 port 9
+At time 2.00369s server received 1024 bytes from 10.1.1.1 port 49153
+At time 2.00369s server sent 1024 bytes to 10.1.1.1 port 49153
+UdpEchoClientApplication:HandleRead(0x207d280, 0x209d3b0)
+UdpEchoClientApplication:HandleRead(): At time 2.00737s client received 1024 bytes from 10.1.1.2 port 9
+UdpEchoClientApplication:StopApplication(0x207d280)
+UdpEchoClientApplication:DoDispose(0x207d280)
+UdpEchoClientApplication:~UdpEchoClient(0x207d280)
+root@gustavosinbandera1-HP-Laptop-17-bs0xx:/usr/ns-allinone-3.26/ns-3.26# 
+```
+
+Ahora puede ver que todos los mensajes que provienen de la aplicación de cliente de eco UDP se identifican como tales. El mensaje "Recibió 1024 bytes de 10.1.1.2" ahora se identifica claramente como proveniente de la aplicación de cliente echo. El mensaje restante debe provenir de la aplicación del servidor de eco UDP. Podemos habilitar ese componente ingresando una lista de componentes separados por dos puntos en la variable de entorno NS_LOG.
+
+`export 'NS_LOG=UdpEchoClientApplication=level_all|prefix_func:UdpEchoServerApplication=level_all|prefix_func'`
+
+La salida despues de hacer `./waf` y se ejecuta el script:
+
+```bash
+root@gustavosinbandera1-HP-Laptop-17-bs0xx:/usr/ns-allinone-3.26/ns-3.26# ./waf --run scratch/myfirst
+Waf: Entering directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Waf: Leaving directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Build commands will be stored in build/compile_commands.json
+'build' finished successfully (2.923s)
+UdpEchoServerApplication:UdpEchoServer(0x1972460)
+UdpEchoClientApplication:UdpEchoClient(0x19984c0)
+UdpEchoClientApplication:SetDataSize(0x19984c0, 1024)
+UdpEchoServerApplication:StartApplication(0x1972460)
+UdpEchoClientApplication:StartApplication(0x19984c0)
+UdpEchoClientApplication:ScheduleTransmit(0x19984c0, +0.0ns)
+UdpEchoClientApplication:Send(0x19984c0)
+UdpEchoClientApplication:Send(): At time 2s client sent 1024 bytes to 10.1.1.2 port 9
+UdpEchoServerApplication:HandleRead(0x1972460, 0x192eaa0)
+UdpEchoServerApplication:HandleRead(): At time 2.00369s server received 1024 bytes from 10.1.1.1 port 49153
+UdpEchoServerApplication:HandleRead(): Echoing packet
+UdpEchoServerApplication:HandleRead(): At time 2.00369s server sent 1024 bytes to 10.1.1.1 port 49153
+UdpEchoClientApplication:HandleRead(0x19984c0, 0x192f2d0)
+UdpEchoClientApplication:HandleRead(): At time 2.00737s client received 1024 bytes from 10.1.1.2 port 9
+UdpEchoClientApplication:StopApplication(0x19984c0)
+UdpEchoServerApplication:StopApplication(0x1972460)
+UdpEchoClientApplication:DoDispose(0x19984c0)
+UdpEchoServerApplication:DoDispose(0x1972460)
+UdpEchoClientApplication:~UdpEchoClient(0x19984c0)
+UdpEchoServerApplication:~UdpEchoServer(0x1972460)
+```
+
+A veces también es útil poder ver el tiempo de simulación en el que se genera un mensaje de registro. Puede hacer esto:
 
 
+`export 'NS_LOG=UdpEchoClientApplication=level_all|prefix_func|prefix_time:UdpEchoServerApplication=level_all|prefix_func|prefix_time'`
+
+si ejecuta el script vera algo como esto:
+```bash
+root@gustavosinbandera1-HP-Laptop-17-bs0xx:/usr/ns-allinone-3.26/ns-3.26# ./waf --run scratch/myfirst
+Waf: Entering directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Waf: Leaving directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Build commands will be stored in build/compile_commands.json
+'build' finished successfully (3.159s)
+0s UdpEchoServerApplication:UdpEchoServer(0x22f9480)
+0s UdpEchoClientApplication:UdpEchoClient(0x2318b30)
+0s UdpEchoClientApplication:SetDataSize(0x2318b30, 1024)
+1s UdpEchoServerApplication:StartApplication(0x22f9480)
+2s UdpEchoClientApplication:StartApplication(0x2318b30)
+2s UdpEchoClientApplication:ScheduleTransmit(0x2318b30, +0.0ns)
+2s UdpEchoClientApplication:Send(0x2318b30)
+2s UdpEchoClientApplication:Send(): At time 2s client sent 1024 bytes to 10.1.1.2 port 9
+2.00369s UdpEchoServerApplication:HandleRead(0x22f9480, 0x2318d40)
+2.00369s UdpEchoServerApplication:HandleRead(): At time 2.00369s server received 1024 bytes from 10.1.1.1 port 49153
+2.00369s UdpEchoServerApplication:HandleRead(): Echoing packet
+2.00369s UdpEchoServerApplication:HandleRead(): At time 2.00369s server sent 1024 bytes to 10.1.1.1 port 49153
+2.00737s UdpEchoClientApplication:HandleRead(0x2318b30, 0x2319550)
+2.00737s UdpEchoClientApplication:HandleRead(): At time 2.00737s client received 1024 bytes from 10.1.1.2 port 9
+10s UdpEchoClientApplication:StopApplication(0x2318b30)
+10s UdpEchoServerApplication:StopApplication(0x22f9480)
+UdpEchoClientApplication:DoDispose(0x2318b30)
+UdpEchoServerApplication:DoDispose(0x22f9480)
+UdpEchoClientApplication:~UdpEchoClient(0x2318b30)
+UdpEchoServerApplication:~UdpEchoServer(0x22f9480)
+```
+
+Puede ver que el constructor para el __UdpEchoServer__ fue llamado en un tiempo de simulación de 0 segundos. Esto sucede realmente antes de que comience la simulación, pero el tiempo se muestra como cero segundos. Lo mismo es cierto para el mensaje del constructor __UdpEchoClient__.
+
+Recuerde que el script __scratch/first.cc__ inició la aplicación del servidor echo al segundo de la simulación. Ahora puede ver que el método __StartApplication__ del servidor se llama, de hecho, en un segundo. También puede ver que la aplicación del cliente echo se inicia en un tiempo de simulación de dos segundos como lo solicitamos en el script.
+
+Ahora puede seguir el progreso de la simulación desde la llamada __ScheduleTransmit__ en el cliente que llama __Send__ a la devolución de llamada HandleRead en la aplicación del servidor echo. Tenga en cuenta que el tiempo transcurrido para que el paquete se envíe a través del enlace punto a punto es 3.69 milisegundos. Verá que el servidor echo registra un mensaje que le indica que ha hecho eco del paquete y luego, después de otro retraso de canal, ve que el cliente echo recibe el paquete echo en su método HandleRead .
+
+Hay muchas cosas que suceden debajo de las cubiertas en esta simulación que tampoco está viendo. Puede seguir fácilmente todo el proceso activando todos los componentes de registro en el sistema. Intente configurar la variable NS_LOG en lo siguiente,
+
+`export 'NS_LOG=*=level_all|prefix_func|prefix_time'`
+
+
+El asterisco anterior es el comodín del componente de registro. Esto activará todo el registro en todos los componentes utilizados en la simulación. No reproduciré la salida aquí (al momento de escribir esto produce 1265 líneas de salida para el eco de paquete único) pero puede redirigir esta información a un archivo y consultarla con su editor favorito si lo desea,
+
+`./waf --run scratch / myfirst> log.out 2> & 1`
+
+#### Agregar registro a su código 
+Puede agregar un nuevo registro a sus simulaciones haciendo llamadas al componente de registro a través de varias macros. Hagámoslo en el script myfirst.cc que tenemos en el directorio scratch.
+
+Recuerde que hemos definido un componente de registro en ese script:
+
+`NS_LOG_COMPONENT_DEFINE  ( "FirstScriptExample" );`
+
+Ahora sabe que puede habilitar todo el registro para este componente configurando la variable de entorno NS_LOG en los distintos niveles. Avancemos y agreguemos algunos registros al script. La macro utilizada para agregar un mensaje de registro de nivel informativo es __NS_LOG_INFO__ . Continúe y agregue uno (justo antes de comenzar a crear los nodos) que le indica que el script es "Creación de topología". Esto se hace como en este fragmento de código,
+
+Abra scratch/myfirst.cc en su editor favorito y agregue la línea,
+
+```bash
+NS_LOG_INFO  ( "Creación de topología" );
+```
+justo antes de las líneas,
+```bash
+Nodos NodeContainer;
+nodos.Crear (2);
+```
+
+Ahora construya el script usando waf y borre la variable __NS_LOG__ para desactivar el torrente de registro que habilitamos anteriormente:
+
+```bash
+./waf
+exportar NS_LOG =
+```
+Ahora, si ejecuta el script,
+```bash
+./waf --run scratch / myfirst
+```
+
+usted no veaa a su nuevo mensaje desde su componente de registro asociado ( FirstScriptExample ) no se ha activado. Para ver su mensaje, deberá habilitar el componente de registro __FirstScriptExample__ con un nivel mayor o igual a __NS_LOG_INFO__ . Si solo desea ver este nivel particular de registro, puede habilitarlo,
+
+```bash
+export NS_LOG = FirstScriptExample = info
+```
+Si ahora ejecuta el script, verá su nuevo mensaje de registro "Creación de topología",
+
+```bash
+root@gustavosinbandera1-HP-Laptop-17-bs0xx:/usr/ns-allinone-3.26/ns-3.26# ./waf --run scratch/myfirst
+Waf: Entering directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Waf: Leaving directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Build commands will be stored in build/compile_commands.json
+'build' finished successfully (3.416s)
+Creacion de Topologia
+At time 2s client sent 1024 bytes to 10.1.1.2 port 9
+At time 2.00369s server received 1024 bytes from 10.1.1.1 port 49153
+At time 2.00369s server sent 1024 bytes to 10.1.1.1 port 49153
+At time 2.00737s client received 1024 bytes from 10.1.1.2 port 9
+```
+
+## Usando argumentos de línea de comando 
+Anulación de atributos predeterminados 
+Otra forma de cambiar el comportamiento de los scripts ns-3 sin editar y construir es mediante argumentos de línea de comandos. Proporcionamos un mecanismo para analizar argumentos de línea de comandos y establecer automáticamente variables locales y globales basadas en esos argumentos.
+
+El primer paso para usar el sistema de argumento de línea de comando es declarar el analizador de línea de comando. Esto se hace simplemente (en su programa principal) como en el siguiente código,
+
+```cpp
+int
+main (int argc, char *argv[])
+{
+  ...
+
+  CommandLine cmd;
+  cmd.Parse (argc, argv);
+
+  ...
+}
+```
+
+Este simple fragmento de dos líneas es realmente muy útil por sí mismo. Abre la puerta a los sistemas de atributos y variables globales ns-3 . Continúe y agregue esas dos líneas de código al script scratch / myfirst.cc al comienzo de main . Continúe y cree el script y ejecútelo, pero solicite ayuda al script de la siguiente manera,
+
+Esto le pedirá a Waf que ejecute el script scratch / myfirst y pase el argumento de la línea de comando --PrintHelp al script. Las comillas son necesarias para resolver qué programa obtiene qué argumento. El analizador de línea de comando ahora verá el argumento --PrintHelp y responderá con,
+
+```bash
+root@gustavosinbandera1-HP-Laptop-17-bs0xx:/usr/ns-allinone-3.26/ns-3.26# ./waf --run "scratch/myfirst --PrintHelp"
+Waf: Entering directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Waf: Leaving directory `/usr/ns-allinone-3.26/ns-3.26/build'
+Build commands will be stored in build/compile_commands.json
+'build' finished successfully (3.122s)
+myfirst [Program Arguments] [General Arguments]
+
+General Arguments:
+    --PrintGlobals:              Print the list of globals.
+    --PrintGroups:               Print the list of groups.
+    --PrintGroup=[group]:        Print all TypeIds of group.
+    --PrintTypeIds:              Print all TypeIds.
+    --PrintAttributes=[typeid]:  Print all attributes of typeid.
+    --PrintHelp:                 Print this help message.
+```
+
+Centrémonos en la opción __--PrintAttributes__. Ya hemos insinuado el sistema de atributos ns-3 mientras recorríamos el script first.cc . Observamos las siguientes líneas de código,
+
+```cpp
+PointToPointHelper pointToPoint;
+pointToPoint.SetDeviceAttribute ("DataRate", StringValue ("5Mbps"));
+pointToPoint.SetChannelAttribute ("Delay", StringValue ("2ms"));
 ```
